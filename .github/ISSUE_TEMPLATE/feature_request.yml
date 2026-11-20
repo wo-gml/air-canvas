@@ -1,0 +1,36 @@
+name: 기능 요청 / 작업
+description: 새 기능이나 할 작업을 등록합니다
+title: "[Feat] "
+labels: ["feature"]
+body:
+  - type: dropdown
+    id: module
+    attributes:
+      label: 모듈
+      options:
+        - tracking (손가락 추적)
+        - canvas (공중 캔버스 / 렌더링)
+        - gestures (제스처 커맨드)
+        - recognition (AI 인식)
+        - export (SVG / Mermaid 내보내기)
+        - app (통합 파이프라인)
+        - docs / ci / 기타
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: 설명
+      description: 무엇을 왜 만드는지
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: 완료 조건
+      description: 무엇이 되면 이 이슈를 닫을 수 있는지
+      placeholder: |
+        - [ ] 검지 끝 좌표를 프레임마다 반환
+        - [ ] 단위 테스트 추가
+    validations:
+      required: true

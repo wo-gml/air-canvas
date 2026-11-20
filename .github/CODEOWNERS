@@ -1,0 +1,22 @@
+# 모듈 담당자. PR이 열리면 해당 경로의 담당자가 리뷰어로 자동 지정됩니다.
+# 팀원 GitHub 아이디를 넣고 주석(#)을 지우세요. (아이디 앞에 @ 필요)
+# 아래쪽 규칙이 위쪽 규칙보다 우선합니다.
+
+# 기본 담당 (팀장)
+# *                                   @LEADER_ID
+
+# 팀원 A: 손가락 추적 + 공중 캔버스 렌더링
+# /src/air_canvas/tracking/           @MEMBER_A_ID
+# /src/air_canvas/canvas/             @MEMBER_A_ID
+
+# 팀원 B: Hugging Face 추론 래퍼 + 결과 내보내기
+# /src/air_canvas/recognition/        @MEMBER_B_ID
+# /src/air_canvas/export/             @MEMBER_B_ID
+
+# 팀원 C: 제스처 커맨드 파서 + 통합(파이프라인) + 테스트
+# /src/air_canvas/gestures/           @MEMBER_C_ID
+# /src/air_canvas/app.py              @MEMBER_C_ID
+# /tests/                             @MEMBER_C_ID
+
+# 공통 인터페이스는 모두가 리뷰
+# /src/air_canvas/core/               @MEMBER_A_ID @MEMBER_B_ID @MEMBER_C_ID
