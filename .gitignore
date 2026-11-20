@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# 가상환경
+.venv/
+venv/
+env/
+
+# 환경변수 / 비밀값 (HF 토큰 등)
+.env
+.env.*
+
+# 모델 가중치는 레포에 올리지 않음 (실행 시 다운로드)
+models/
+*.task
+*.pt
+*.pth
+*.onnx
+*.safetensors
+*.bin
+
+# 실행 결과물 (저장한 캔버스, 내보낸 SVG/Mermaid 등)
+outputs/
+
+# 에디터 / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
