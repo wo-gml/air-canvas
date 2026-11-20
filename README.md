@@ -1,6 +1,6 @@
 # Air Canvas ✋🖊️
 
-> 손동작으로 그리는 AI 스마트 화이트보드 (Gesture-to-Image / Code Canvas)
+손동작으로 그리는 AI 스마트 화이트보드 (Gesture-to-Image / Code Canvas)
 
 키보드나 마우스 없이, 허공에서 손가락으로 그린 그림과 글씨를 AI가 인식해
 **깨끗한 디지털 도형, 텍스트, 다이어그램 코드(Mermaid)** 로 바꿔주는 인터랙티브 도구입니다.
@@ -8,7 +8,9 @@
 <!-- 데모 GIF가 준비되면 아래 주석을 해제하세요 -->
 <!-- ![demo](assets/demo.gif) -->
 
-## 주요 기능
+---
+
+### ✨ Features
 
 - **에어 드로잉**: 검지 끝을 펜처럼 써서 허공에 그리기 (MediaPipe Hands)
 - **제스처 커맨드**: 손 모양만으로 그리기, 지우기, 색 변경, 인식, 저장
@@ -16,7 +18,7 @@
 - **손글씨 인식**: Hugging Face OCR 모델로 공중에 쓴 글씨를 텍스트로 변환
 - **Code Canvas**: 그린 박스와 화살표를 Mermaid flowchart 코드로 내보내기
 
-## 제스처
+### ✋ Gestures
 
 | 손 모양 | 동작 |
 |---|---|
@@ -28,7 +30,21 @@
 
 디버깅용 키보드 단축키: `r` 인식, `s` 저장, `z` 되돌리기, `c` 전체 지우기, `p` 색 변경, `q`/`ESC` 종료
 
-## 동작 구조
+---
+
+### 🛠 Tech Stack
+
+아래 버전으로 설치와 테스트를 확인했습니다.
+
+- **Language**: Python `v3.11.18`
+- **Hand Tracking**: MediaPipe `v1.2.3` (Hand Landmarker)
+- **Vision**: OpenCV (opencv-contrib-python) `v5.1.0.95`
+- **Array**: NumPy `v2.4.6`
+- **OCR** (선택): Hugging Face Transformers, PyTorch `구현 후 기재`
+- **Test / Lint**: pytest `v9.2.0`, Ruff `v0.17.6`
+- **CI**: GitHub Actions
+
+### 🧱 Architecture
 
 ```mermaid
 flowchart LR
@@ -42,31 +58,7 @@ flowchart LR
 
 자세한 설계와 모듈 간 계약은 [docs/architecture.md](docs/architecture.md)를 참고하세요.
 
-## 시작하기
-
-> **Python 3.11** 사용을 권장합니다. CI와 같은 버전이고, OCR에 쓰는 `torch`는 Python 3.15용 패키지가 아직 없습니다.
-> macOS: `brew install python@3.11`
-
-```bash
-git clone https://github.com/<ORG>/<REPO>.git
-cd <REPO>
-python3.11 -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install -e ".[dev]"            # 기본 + 개발 도구
-pip install -e ".[ocr]"            # (선택) Hugging Face 손글씨 OCR
-pre-commit install
-```
-
-손 추적 모델을 받아 `models/hand_landmarker.task` 에 저장합니다.
-([MediaPipe Hand Landmarker](https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker))
-
-```bash
-python -m air_canvas               # 실행
-python -m air_canvas --no-ocr      # OCR 없이 도형 인식만
-pytest                             # 테스트
-```
-
-## 프로젝트 구조
+### 📁 Project Structure
 
 ```
 src/air_canvas/
@@ -82,7 +74,41 @@ tests/             가짜 객체 기반 단위·통합 테스트
 docs/              설계 문서, 로드맵
 ```
 
-## 팀
+---
+
+### 🚀 Getting Started
+
+> **Python 3.11** 사용을 권장합니다. CI와 같은 버전이고, OCR에 쓰는 `torch`는 Python 3.15용 패키지가 아직 없습니다.
+> macOS: `brew install python@3.11`
+
+**1. 설치**
+
+```bash
+git clone https://github.com/wo-gml/air-canvas.git
+cd air-canvas
+python3.11 -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+pip install -e ".[dev]"            # 기본 + 개발 도구
+pip install -e ".[ocr]"            # (선택) Hugging Face 손글씨 OCR
+pre-commit install
+```
+
+**2. 손 추적 모델 다운로드**
+
+[MediaPipe Hand Landmarker](https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker) 모델을 받아
+`models/hand_landmarker.task` 에 저장합니다.
+
+**3. 실행**
+
+```bash
+python -m air_canvas               # 실행
+python -m air_canvas --no-ocr      # OCR 없이 도형 인식만
+pytest                             # 테스트
+```
+
+---
+
+### 👥 Team
 
 | 역할 | 담당 모듈 | 담당자 |
 |---|---|---|
@@ -90,11 +116,37 @@ docs/              설계 문서, 로드맵
 | 팀원 B | Hugging Face 추론 래퍼, 궤적 → 텍스트/도형 변환 (`recognition/`, `export/`) | |
 | 팀원 C | 제스처 커맨드 파서, 통합 테스트 (`gestures/`, `app.py`, `tests/`) | |
 
-## 기여하기
+### 🌳 Branch Strategy
 
-브랜치 전략, 커밋 규칙, PR 절차는 [CONTRIBUTING.md](CONTRIBUTING.md)를 참고하세요.
+`main` 하나에 이슈별 작업 브랜치를 PR로 병합합니다. (GitHub Flow)
 
-## 라이선스
+- 이슈를 만들면 `feat/#3-손-랜드마크-추적-구현` 같은 브랜치가 **자동으로 생성**됩니다.
+- 커밋은 `[FEAT] #3 작업 내용` 형식으로 작성합니다.
+- PR은 승인 1명 + CI 통과 후 **merge commit** 으로 병합합니다.
+
+자세한 절차는 [CONTRIBUTING.md](CONTRIBUTING.md)를 참고하세요.
+
+---
+
+### 📚 참고 자료
+
+참고한 문서, 논문, 블로그, 영상, 코드는 모두 여기에 추가합니다.
+
+**손 추적**
+- [MediaPipe Hand Landmarker 가이드](https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker): 21개 손 랜드마크 정의와 모델 파일
+- [MediaPipe Hand Landmarker Python 가이드](https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker/python): Tasks API 사용법
+- [1€ Filter](https://gery.casiez.net/1euro/): Casiez et al., CHI 2012. 손가락 좌표 떨림 보정
+
+**인식**
+- [OpenCV Contour Features](https://docs.opencv.org/4.x/dd/d49/tutorial_py_contour_features.html): `approxPolyDP` 로 도형 꼭짓점 근사
+- [microsoft/trocr-small-handwritten](https://huggingface.co/microsoft/trocr-small-handwritten): 손글씨 OCR 모델 카드
+- [TrOCR: Transformer-based Optical Character Recognition with Pre-trained Models](https://arxiv.org/abs/2109.10282): Li et al., 2021
+
+**내보내기 / 개발 도구**
+- [Mermaid Flowchart 문법](https://mermaid.js.org/syntax/flowchart.html)
+- [Ruff](https://docs.astral.sh/ruff/)
+
+### 📄 License
 
 [MIT](LICENSE)
 
