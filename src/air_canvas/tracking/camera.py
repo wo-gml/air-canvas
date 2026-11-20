@@ -26,7 +26,9 @@ class Camera:
         raise NotImplementedError("TODO(팀원 A): 웹캠 프레임 읽기")
 
     def release(self) -> None:
-        raise NotImplementedError("TODO(팀원 A): 웹캠 해제")
+        # TODO(팀원 A): 웹캠 해제 (cap.release()).
+        # 정리 함수는 예외를 던지면 원래 에러를 가리므로 NotImplementedError를 쓰지 않는다.
+        pass
 
     def __enter__(self) -> Camera:
         return self
