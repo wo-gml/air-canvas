@@ -44,7 +44,8 @@ flowchart LR
 
 ## 시작하기
 
-> MediaPipe는 최신 Python 버전을 늦게 지원합니다. **Python 3.11** 사용을 권장합니다.
+> **Python 3.11** 사용을 권장합니다. CI와 같은 버전이고, OCR에 쓰는 `torch`는 Python 3.15용 패키지가 아직 없습니다.
+> macOS: `brew install python@3.11`
 
 ```bash
 git clone https://github.com/<ORG>/<REPO>.git
