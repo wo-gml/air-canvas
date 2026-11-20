@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,11 +7,14 @@ name = "air-canvas"
 version = "0.1.0"
 description = "손가락으로 허공에 그린 그림/글씨를 AI가 인식해 디지털 도형·텍스트·다이어그램 코드로 바꿔주는 스마트 화이트보드"
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = [
     "numpy>=1.24",
-    "opencv-python>=4.8",
+    # mediapipe가 opencv-contrib-python에 의존하므로 같은 패키지를 쓴다.
+    # opencv-python을 함께 설치하면 cv2 모듈이 두 벌 깔려 충돌할 수 있다.
+    "opencv-contrib-python>=4.8",
     "mediapipe>=0.10.14",
 ]
 
