@@ -42,14 +42,29 @@ flowchart LR
 
 자세한 설계와 모듈 간 계약은 [docs/architecture.md](docs/architecture.md)를 참고하세요.
 
+## 사용한 패키지와 버전
+
+아래 버전으로 설치와 테스트를 확인했습니다. 설치는 [시작하기](#시작하기)의 `pip install` 한 번으로 끝납니다.
+
+| 패키지 | 버전 | 용도 |
+|---|---|---|
+| Python | 3.11.18 | |
+| [mediapipe](https://pypi.org/project/mediapipe/) | 1.2.3 | 손 랜드마크 추적 (Hand Landmarker) |
+| [opencv-contrib-python](https://pypi.org/project/opencv-contrib-python/) | 5.1.0.95 | 웹캠 입력, 그리기, 도형 인식 |
+| [numpy](https://pypi.org/project/numpy/) | 2.4.6 | 좌표와 이미지 배열 처리 |
+| [transformers](https://pypi.org/project/transformers/) | 구현 후 기재 | (선택) Hugging Face 손글씨 OCR |
+| [torch](https://pypi.org/project/torch/) | 구현 후 기재 | (선택) transformers 실행 백엔드 |
+| [pytest](https://pypi.org/project/pytest/) | 9.2.0 | (개발) 테스트 |
+| [ruff](https://pypi.org/project/ruff/) | 0.17.6 | (개발) 린트와 포맷 |
+
 ## 시작하기
 
 > **Python 3.11** 사용을 권장합니다. CI와 같은 버전이고, OCR에 쓰는 `torch`는 Python 3.15용 패키지가 아직 없습니다.
 > macOS: `brew install python@3.11`
 
 ```bash
-git clone https://github.com/<ORG>/<REPO>.git
-cd <REPO>
+git clone https://github.com/wo-gml/air-canvas.git
+cd air-canvas
 python3.11 -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"            # 기본 + 개발 도구
@@ -92,7 +107,27 @@ docs/              설계 문서, 로드맵
 
 ## 기여하기
 
-브랜치 전략, 커밋 규칙, PR 절차는 [CONTRIBUTING.md](CONTRIBUTING.md)를 참고하세요.
+작업 브랜치를 `main`으로 PR하고, 리뷰를 받은 뒤 merge commit으로 병합합니다 (GitHub Flow).
+브랜치 이름, 커밋 규칙, PR 절차는 [CONTRIBUTING.md](CONTRIBUTING.md)를 참고하세요.
+
+## 참고 자료
+
+참고한 문서, 논문, 블로그, 영상, 코드는 모두 여기에 추가합니다.
+
+**손 추적**
+- [MediaPipe Hand Landmarker 가이드](https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker): 21개 손 랜드마크 정의와 모델 파일
+- [MediaPipe Hand Landmarker Python 가이드](https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker/python): Tasks API 사용법
+- [1€ Filter](https://gery.casiez.net/1euro/): Casiez et al., CHI 2012. 손가락 좌표 떨림 보정
+
+**인식**
+- [OpenCV Contour Features](https://docs.opencv.org/4.x/dd/d49/tutorial_py_contour_features.html): `approxPolyDP` 로 도형 꼭짓점 근사
+- [microsoft/trocr-small-handwritten](https://huggingface.co/microsoft/trocr-small-handwritten): 손글씨 OCR 모델 카드
+- [TrOCR: Transformer-based Optical Character Recognition with Pre-trained Models](https://arxiv.org/abs/2109.10282): Li et al., 2021
+
+**내보내기 / 개발 도구**
+- [Mermaid Flowchart 문법](https://mermaid.js.org/syntax/flowchart.html)
+- [Conventional Commits](https://www.conventionalcommits.org/ko/v1.0.0/)
+- [Ruff](https://docs.astral.sh/ruff/)
 
 ## 라이선스
 
