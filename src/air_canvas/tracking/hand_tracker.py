@@ -13,10 +13,16 @@ if TYPE_CHECKING:
 
 class MediaPipeHandTracker:
     """TODO(팀원 A):
-    - MediaPipe Tasks의 HandLandmarker 사용 (구버전 mp.solutions.hands는 deprecated)
+    - MediaPipe Tasks의 HandLandmarker 사용
+      (mediapipe 1.x부터 구버전 mp.solutions.hands는 삭제됨)
+        from mediapipe.tasks.python import BaseOptions, vision
+        vision.HandLandmarker.create_from_options(vision.HandLandmarkerOptions(
+            base_options=BaseOptions(model_asset_path=...),
+            running_mode=vision.RunningMode.VIDEO, num_hands=..., ...))
       모델 파일: https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker
       -> config.model_path 에 저장 (models/ 는 .gitignore 처리됨)
-    - BGR -> RGB 변환 후 VIDEO 모드로 detect_for_video 호출
+    - BGR -> RGB 변환, mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)로 감싸
+      detect_for_video(image, timestamp_ms) 호출 (timestamp는 단조 증가해야 함)
     - 결과를 HandLandmarks(points=21개 Point, handedness, score)로 변환
     - mediapipe는 import가 무거우니 __init__ 안에서 import
     """

@@ -22,7 +22,10 @@ class CameraConfig:
 @dataclass
 class TrackingConfig:
     model_path: Path = Path("models/hand_landmarker.task")
-    min_detection_confidence: float = 0.6
+    # HandLandmarkerOptions의 같은 이름 옵션으로 그대로 전달
+    num_hands: int = 1
+    min_hand_detection_confidence: float = 0.6
+    min_hand_presence_confidence: float = 0.5
     min_tracking_confidence: float = 0.5
     smoothing_alpha: float = 0.5  # 지수 이동평균 계수 (작을수록 부드럽고 느림)
 
