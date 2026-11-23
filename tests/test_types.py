@@ -28,3 +28,8 @@ def test_recognition_result_is_text():
     box = BBox(0, 0, 1, 1)
     assert RecognitionResult(bbox=box, confidence=0.8, text="hello").is_text
     assert not RecognitionResult(bbox=box, confidence=0.8).is_text
+
+
+def test_recognition_result_outline_defaults_to_empty():
+    # outline을 모르는 인식기(OCR 등)도 그대로 결과를 만들 수 있어야 한다.
+    assert RecognitionResult(bbox=BBox(0, 0, 1, 1), confidence=0.8).outline == ()
