@@ -50,6 +50,14 @@ class RecognitionConfig:
     enable_ocr: bool = True
     ocr_model_id: str = "microsoft/trocr-small-handwritten"
     shape_min_confidence: float = 0.7
+    # 도형 인식 (recognition/shape.py). 값은 tests/strokes.py 손그림 예제로 측정해서 정함.
+    shape_min_size: float = 20.0  # bbox 대각선(px)이 이보다 작은 획은 점/실수로 보고 무시
+    # 길이 비율 = 획 전체 길이 / 볼록 껍질(convex hull) 둘레
+    #   닫힌 도형 ~1.0 (손떨림·덧그림 포함 0.91~1.28), 직선 ~0.5, 낙서 1.35 이상
+    closed_min_length_ratio: float = 0.85
+    closed_max_length_ratio: float = 1.32
+    line_max_length_ratio: float = 0.8
+    line_max_thinness: float = 0.15  # 최소 외접 사각형의 짧은 변 / 긴 변 (직선은 0.06 이하)
 
 
 @dataclass
