@@ -38,6 +38,7 @@ class HandStyle:
 HAND = HandStyle()
 NEAT = HandStyle(jitter=0, wobble=0, uneven_speed=0, random_start=False)
 SHAKY = HandStyle(jitter=3.0, wobble=8.0, uneven_speed=0.6)
+DENSE = HandStyle(jitter=2.0, num_points=300)
 
 
 # --- 도형별 생성 함수 ---------------------------------------------------------
@@ -61,10 +62,7 @@ def rectangle(
     seed: int = 0,
 ) -> Stroke:
     """사각형. angle은 도(degree) 단위 회전."""
-    cx, cy = center
-    w, h = width / 2, height / 2
-    corners = np.array([(cx - w, cy - h), (cx + w, cy - h), (cx + w, cy + h), (cx - w, cy + h)])
-    return polygon(_rotate(corners, center, angle), style, seed)
+    return polygon(rectangle_corners(center, width, height, angle), style, seed)
 
 
 def triangle(
@@ -75,15 +73,7 @@ def triangle(
     seed: int = 0,
 ) -> Stroke:
     """꼭짓점이 위를 향한 정삼각형. size는 한 변의 길이."""
-    cx, cy = center
-    r = size / math.sqrt(3)  # 외접원 반지름
-    corners = np.array(
-        [
-            (cx + r * math.cos(math.radians(a)), cy + r * math.sin(math.radians(a)))
-            for a in (-90, 30, 150)
-        ]
-    )
-    return polygon(_rotate(corners, center, angle), style, seed)
+    return polygon(triangle_corners(center, size, angle), style, seed)
 
 
 def ellipse(
@@ -95,10 +85,7 @@ def ellipse(
     seed: int = 0,
 ) -> Stroke:
     """타원. 손으로 그린 원은 대부분 살짝 타원이 된다."""
-    cx, cy = center
-    a = np.linspace(0, 2 * math.pi, 96, endpoint=False)
-    path = np.column_stack([cx + rx * np.cos(a), cy + ry * np.sin(a)])
-    path = _rotate(path, center, angle)
+    path = ellipse_outline(center, rx, ry, angle)
     return _to_stroke(_trace(path, closed=True, style=style, rng=np.random.default_rng(seed)))
 
 
@@ -122,6 +109,14 @@ def line(
     return _to_stroke(_trace(path, closed=False, style=style, rng=np.random.default_rng(seed)))
 
 
+def open_path(
+    vertices: Sequence[tuple[float, float]], style: HandStyle = HAND, seed: int = 0
+) -> Stroke:
+    """꼭짓점을 차례로 이은 열린 획 ('ㄷ'자, 호 등)."""
+    path = np.asarray(vertices, dtype=float)
+    return _to_stroke(_trace(path, closed=False, style=style, rng=np.random.default_rng(seed)))
+
+
 def scribble(
     center: tuple[float, float] = (320, 240),
     size: float = 200,
@@ -138,6 +133,48 @@ def scribble(
     return _to_stroke(pts)
 
 
+# --- 이상적인(손떨림 없는) 도형 좌표: 보정 결과와 비교하는 정답 --------------------
+
+
+def rectangle_corners(
+    center: tuple[float, float] = (320, 240),
+    width: float = 200,
+    height: float = 140,
+    angle: float = 0.0,
+) -> np.ndarray:
+    cx, cy = center
+    w, h = width / 2, height / 2
+    corners = np.array([(cx - w, cy - h), (cx + w, cy - h), (cx + w, cy + h), (cx - w, cy + h)])
+    return _rotate(corners, center, angle)
+
+
+def triangle_corners(
+    center: tuple[float, float] = (320, 240), size: float = 200, angle: float = 0.0
+) -> np.ndarray:
+    cx, cy = center
+    r = size / math.sqrt(3)  # 외접원 반지름
+    corners = np.array(
+        [
+            (cx + r * math.cos(math.radians(a)), cy + r * math.sin(math.radians(a)))
+            for a in (-90, 30, 150)
+        ]
+    )
+    return _rotate(corners, center, angle)
+
+
+def ellipse_outline(
+    center: tuple[float, float] = (320, 240),
+    rx: float = 120,
+    ry: float = 80,
+    angle: float = 0.0,
+    num_points: int = 96,
+) -> np.ndarray:
+    cx, cy = center
+    a = np.linspace(0, 2 * math.pi, num_points, endpoint=False)
+    path = np.column_stack([cx + rx * np.cos(a), cy + ry * np.sin(a)])
+    return _rotate(path, center, angle)
+
+
 # --- 정답이 붙은 예제 모음 ----------------------------------------------------
 
 
@@ -146,6 +183,8 @@ class StrokeCase:
     name: str
     expected: ShapeKind
     stroke: Stroke
+    # 손떨림 없이 그렸다면 나왔을 도형 (다각형 꼭짓점 / 타원 둘레 점 / 직선 시작·끝). UNKNOWN이면 빔
+    ideal: tuple[Point, ...] = ()
 
 
 def sample_cases(seed: int = 0) -> list[StrokeCase]:
@@ -158,37 +197,75 @@ def sample_cases(seed: int = 0) -> list[StrokeCase]:
         ShapeKind.UNKNOWN,
     )
     s = seed
+
+    def case(name, expected, stroke, ideal=()):
+        return StrokeCase(
+            name, expected, stroke, tuple(Point(float(x), float(y)) for x, y in ideal)
+        )
+
+    rect, tri, circ = rectangle_corners(), triangle_corners(), ellipse_outline(rx=100, ry=100)
+    tall = [(320, 80), (380, 400), (260, 400)]
+    arc = [(200 + 240 * t, 240 - 50 * (1 - (2 * t - 1) ** 2)) for t in np.linspace(0, 1, 30)]
+    semicircle = [
+        (320 + 100 * math.cos(a), 240 + 100 * math.sin(a))
+        for a in np.linspace(-math.pi / 2, math.pi / 2, 40)
+    ]
     return [
-        StrokeCase("rect_neat", R, rectangle(style=NEAT, seed=s)),
-        StrokeCase("rect_hand", R, rectangle(seed=s)),
-        StrokeCase("rect_shaky", R, rectangle(style=SHAKY, seed=s)),
-        StrokeCase("rect_rotated_25", R, rectangle(angle=25, seed=s)),
-        StrokeCase("rect_wide_thin", R, rectangle(width=320, height=70, seed=s)),
-        StrokeCase("rect_unclosed", R, rectangle(style=replace(HAND, gap=0.08), seed=s)),
-        StrokeCase("rect_overshoot", R, rectangle(style=replace(HAND, overshoot=0.12), seed=s)),
-        StrokeCase(
-            "rect_round_corner", R, rectangle(style=replace(HAND, round_corners=0.25), seed=s)
+        case("rect_neat", R, rectangle(style=NEAT, seed=s), rect),
+        case("rect_hand", R, rectangle(seed=s), rect),
+        case("rect_shaky", R, rectangle(style=SHAKY, seed=s), rect),
+        case("rect_rotated_25", R, rectangle(angle=25, seed=s), rectangle_corners(angle=25)),
+        case(
+            "rect_wide_thin",
+            R,
+            rectangle(width=320, height=70, seed=s),
+            rectangle_corners(width=320, height=70),
         ),
-        StrokeCase("tri_neat", T, triangle(style=NEAT, seed=s)),
-        StrokeCase("tri_hand", T, triangle(seed=s)),
-        StrokeCase("tri_shaky", T, triangle(style=SHAKY, seed=s)),
-        StrokeCase("tri_upside_down", T, triangle(angle=180, seed=s)),
-        StrokeCase("tri_tall", T, polygon([(320, 80), (380, 400), (260, 400)], seed=s)),
-        StrokeCase("tri_unclosed", T, triangle(style=replace(HAND, gap=0.08), seed=s)),
-        StrokeCase(
-            "tri_round_corner", T, triangle(style=replace(HAND, round_corners=0.25), seed=s)
+        case("rect_unclosed", R, rectangle(style=replace(HAND, gap=0.08), seed=s), rect),
+        case("rect_overshoot", R, rectangle(style=replace(HAND, overshoot=0.12), seed=s), rect),
+        case(
+            "rect_round_corner", R, rectangle(style=replace(HAND, round_corners=0.25), seed=s), rect
         ),
-        StrokeCase("circle_neat", C, circle(style=NEAT, seed=s)),
-        StrokeCase("circle_hand", C, circle(seed=s)),
-        StrokeCase("circle_shaky", C, circle(style=SHAKY, seed=s)),
-        StrokeCase("circle_small", C, circle(radius=30, style=replace(HAND, jitter=1.0), seed=s)),
-        StrokeCase("circle_oval", C, ellipse(rx=130, ry=90, angle=15, seed=s)),
-        StrokeCase("circle_unclosed", C, circle(style=replace(HAND, gap=0.1), seed=s)),
-        StrokeCase("circle_overshoot", C, circle(style=replace(HAND, overshoot=0.15), seed=s)),
-        StrokeCase("line_neat", L, line(style=NEAT, seed=s)),
-        StrokeCase("line_hand", L, line(seed=s)),
-        StrokeCase("line_diagonal", L, line((180, 360), (460, 120), seed=s)),
-        StrokeCase("scribble", U, scribble(seed=s)),
+        case("tri_neat", T, triangle(style=NEAT, seed=s), tri),
+        case("tri_hand", T, triangle(seed=s), tri),
+        case("tri_shaky", T, triangle(style=SHAKY, seed=s), tri),
+        case("tri_upside_down", T, triangle(angle=180, seed=s), triangle_corners(angle=180)),
+        case("tri_tall", T, polygon(tall, seed=s), tall),
+        case("tri_unclosed", T, triangle(style=replace(HAND, gap=0.08), seed=s), tri),
+        case("tri_round_corner", T, triangle(style=replace(HAND, round_corners=0.25), seed=s), tri),
+        case("circle_neat", C, circle(style=NEAT, seed=s), circ),
+        case("circle_hand", C, circle(seed=s), circ),
+        case("circle_shaky", C, circle(style=SHAKY, seed=s), circ),
+        case(
+            "circle_small",
+            C,
+            circle(radius=30, style=replace(HAND, jitter=1.0), seed=s),
+            ellipse_outline(rx=30, ry=30),
+        ),
+        case(
+            "circle_oval",
+            C,
+            ellipse(rx=130, ry=90, angle=15, seed=s),
+            ellipse_outline(rx=130, ry=90, angle=15),
+        ),
+        case("circle_unclosed", C, circle(style=replace(HAND, gap=0.1), seed=s), circ),
+        case("circle_overshoot", C, circle(style=replace(HAND, overshoot=0.15), seed=s), circ),
+        case("line_neat", L, line(style=NEAT, seed=s), [(200, 240), (440, 240)]),
+        case("line_hand", L, line(seed=s), [(200, 240), (440, 240)]),
+        case("line_shaky", L, line(style=SHAKY, seed=s), [(200, 240), (440, 240)]),
+        case("line_short", L, line((270, 240), (370, 240), seed=s), [(270, 240), (370, 240)]),
+        case("line_diagonal", L, line((180, 360), (460, 120), seed=s), [(180, 360), (460, 120)]),
+        # 카메라 프레임 속도가 빠르면 점이 촘촘하게 찍힌다.
+        case("rect_dense", R, rectangle(style=DENSE, seed=s), rect),
+        case("circle_dense", C, circle(style=replace(SHAKY, num_points=300), seed=s), circ),
+        case("line_dense", L, line(style=DENSE, seed=s), [(200, 240), (440, 240)]),
+        # 인식하면 안 되는 획: 손그림 그대로 둬야 한다.
+        case("scribble", U, scribble(seed=s)),
+        case("arc", U, open_path(arc, seed=s)),
+        case("u_shape", U, open_path([(220, 150), (420, 150), (420, 330), (220, 330)], seed=s)),
+        case("retraced_line", U, open_path([(200, 240), (440, 240), (210, 244)], seed=s)),
+        case("trapezoid", U, polygon([(250, 150), (390, 150), (450, 320), (190, 320)], seed=s)),
+        case("semicircle", U, polygon(semicircle, seed=s)),
     ]
 
 
@@ -269,8 +346,14 @@ def _to_stroke(pts: np.ndarray) -> Stroke:
 # --- 미리보기 -----------------------------------------------------------------
 
 
-def render_preview(cases: Sequence[StrokeCase], cell: int = 220, cols: int = 6) -> np.ndarray:
-    """예제를 격자로 그린 이미지. 초록 점 = 시작점, 빨간 점 = 끝점."""
+def render_preview(
+    cases: Sequence[StrokeCase], recognizer=None, cell: int = 220, cols: int = 6
+) -> np.ndarray:
+    """예제를 격자로 그린 이미지. 초록 점 = 시작점, 빨간 점 = 끝점.
+
+    recognizer(ShapeRecognizer)를 주면 보정된 도형을 파란 선으로 겹쳐 그리고
+    판정 결과를 적는다. 정답과 다르면 빨간 글씨.
+    """
     import cv2
 
     rows = math.ceil(len(cases) / cols)
@@ -280,15 +363,31 @@ def render_preview(cases: Sequence[StrokeCase], cell: int = 220, cols: int = 6) 
         ox, oy = (i % cols) * cell, (i // cols) * cell
         pts = np.array(case.stroke.points)
         lo, span = pts.min(axis=0), max(np.ptp(pts, axis=0).max(), 1.0)
-        scaled = (pts - lo) / span * (cell - 2 * pad) + (ox + pad, oy + pad)
-        poly = scaled.round().astype(np.int32)
+
+        def to_cell(arr, lo=lo, span=span, ox=ox, oy=oy):
+            scaled = (np.asarray(arr) - lo) / span * (cell - 2 * pad) + (ox + pad, oy + pad)
+            return scaled.round().astype(np.int32)
+
+        poly = to_cell(pts)
         cv2.rectangle(img, (ox, oy), (ox + cell - 1, oy + cell - 1), (220, 220, 220), 1)
-        cv2.polylines(img, [poly], isClosed=False, color=(40, 40, 40), thickness=2)
+        cv2.polylines(img, [poly], isClosed=False, color=(150, 150, 150), thickness=2)
         cv2.circle(img, tuple(int(v) for v in poly[0]), 5, (0, 170, 0), -1)
         cv2.circle(img, tuple(int(v) for v in poly[-1]), 5, (0, 0, 220), -1)
         cv2.putText(
-            img, case.name, (ox + 6, oy + 18), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (90, 90, 90), 1
+            img, case.name, (ox + 6, oy + 16), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (90, 90, 90), 1
         )
+        if recognizer is None:
+            continue
+
+        fit = recognizer.classify(case.stroke)
+        accepted = fit.confidence >= recognizer.config.shape_min_confidence
+        kind = fit.kind if accepted else ShapeKind.UNKNOWN
+        if kind is not ShapeKind.UNKNOWN:
+            closed = kind is not ShapeKind.LINE
+            cv2.polylines(img, [to_cell(fit.outline)], closed, (220, 120, 0), 2, cv2.LINE_AA)
+        label = f"-> {kind.name} {fit.confidence:.2f}" if accepted else "-> UNKNOWN"
+        color = (0, 130, 0) if kind is case.expected else (0, 0, 220)
+        cv2.putText(img, label, (ox + 6, oy + cell - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.42, color, 1)
     return img
 
 
@@ -297,7 +396,11 @@ if __name__ == "__main__":
 
     import cv2
 
+    from air_canvas.config import RecognitionConfig
+    from air_canvas.recognition import ShapeRecognizer
+
     out = Path("outputs/fake_strokes.png")
     out.parent.mkdir(exist_ok=True)
-    cv2.imwrite(str(out), render_preview(sample_cases()))
+    recognizer = ShapeRecognizer(RecognitionConfig())
+    cv2.imwrite(str(out), render_preview(sample_cases(), recognizer))
     print(f"saved {out}")
