@@ -22,4 +22,17 @@ class RuleBasedGestureClassifier:
         self.config = config
 
     def classify(self, hand: HandLandmarks) -> Gesture:
-        raise NotImplementedError("TODO(팀원 C): 랜드마크로 손 모양 판정")
+        points = hand.points
+
+        index_up = points[8].y < points[6].y
+        middle_up = points[12].y < points[10].y
+        ring_up = points[16].y < points[14].y
+        pinky_up = points[20].y < points[18].y
+
+        if index_up and middle_up and not ring_up and not pinky_up:
+            return Gesture.HOVER
+
+        if index_up and not middle_up and not ring_up and not pinky_up:
+            return Gesture.DRAW
+
+        return Gesture.NONE
