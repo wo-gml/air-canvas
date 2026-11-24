@@ -31,6 +31,7 @@ class ShapeFit:
 
 
 _UNKNOWN = ShapeFit(ShapeKind.UNKNOWN, 0.0)
+_CLOSED = frozenset({ShapeKind.RECTANGLE, ShapeKind.TRIANGLE, ShapeKind.CIRCLE})
 
 
 class ShapeRecognizer:
@@ -49,6 +50,7 @@ class ShapeRecognizer:
          시작점-끝점 거리 대신 길이 비율을 쓰는 이유: 시작점을 지나쳐 더 그리면
          끝점이 멀어져도 도형은 닫혀 있기 때문
        - 획이 껍질 테두리를 따라가야 한다 (안쪽을 헤집는 낙서 제외)
+       - 껍질 둘레 대부분을 획이 지나가야 한다 (엉뚱한 획까지 이어 붙여 껍질만 커진 묶음 제외)
     5. 세 도형에 얼마나 잘 맞는지 점수를 매긴다 (점수 = confidence)
        - 사각형: 껍질 넓이 / 최소 외접 사각형 넓이            (사각형이면 1)
                  외접 사각형 꼭짓점 근처가 비어 있으면 0 (사다리꼴, 반원)
@@ -66,28 +68,68 @@ class ShapeRecognizer:
     - 수평/수직에서 config.snap_angle 이내로 기울었으면 똑바로 편다
     - 거의 둥근 타원은 정원으로 편다
 
-    한 획 = 한 도형만 인식한다. 여러 획으로 나눠 그린 도형은 아직 지원하지 않는다.
+    여러 획으로 나눠 그린 도형 (recognize)
+    - 연달아 그린 획 2 ~ config.shape_max_group_strokes개를 끝점이 가까운 순서로 이어
+      한 획으로 만든 뒤 위와 같은 방법으로 판정한다. 획 방향과 그린 순서는 상관없다.
+      (변을 하나씩 그은 사각형, 반씩 그린 원, 손 추적이 끊겨 둘로 나뉜 획)
+    - 이어지는 끝점 사이가 config.shape_join_max_gap보다 벌어지면 묶지 않는다.
+    - 혼자서 닫힌 도형으로 인식된 획은 이미 완성된 도형이므로 묶지 않는다.
+    - 묶음 후보가 겹치면 획을 더 많이 묶은 것, 그다음 confidence가 높은 것을 고른다.
+      묶이지 않은 획은 하나씩 판정한다.
     """
 
     def __init__(self, config: RecognitionConfig) -> None:
         self.config = config
 
     def recognize(self, strokes: Sequence[Stroke]) -> list[RecognitionResult]:
-        results = []
-        for i, stroke in enumerate(strokes):
-            fit = self.classify(stroke)
-            if fit.kind is ShapeKind.UNKNOWN or fit.confidence < self.config.shape_min_confidence:
-                continue
-            results.append(
-                RecognitionResult(
-                    bbox=_bbox(fit.outline),
-                    confidence=fit.confidence,
-                    shape=fit.kind,
-                    stroke_indices=(i,),
-                    outline=fit.outline,
-                )
+        """획 목록 -> 인식된 도형 목록 (첫 획 순서대로). 도형이 아닌 획은 결과에 없다."""
+        fits = [self.classify(stroke) for stroke in strokes]
+        found: list[tuple[tuple[int, ...], ShapeFit]] = []
+        used: set[int] = set()
+        for indices, fit in self._group_candidates(strokes, fits):
+            if used.isdisjoint(indices):
+                found.append((indices, fit))
+                used.update(indices)
+        found += [((i,), fit) for i, fit in enumerate(fits) if i not in used and self._accepts(fit)]
+        found.sort(key=lambda item: item[0][0])
+        return [
+            RecognitionResult(
+                bbox=_bbox(fit.outline),
+                confidence=fit.confidence,
+                shape=fit.kind,
+                stroke_indices=indices,
+                outline=fit.outline,
             )
-        return results
+            for indices, fit in found
+        ]
+
+    def _accepts(self, fit: ShapeFit) -> bool:
+        return (
+            fit.kind is not ShapeKind.UNKNOWN and fit.confidence >= self.config.shape_min_confidence
+        )
+
+    def _group_candidates(
+        self, strokes: Sequence[Stroke], fits: Sequence[ShapeFit]
+    ) -> list[tuple[tuple[int, ...], ShapeFit]]:
+        """연달아 그린 획을 이어 붙여 도형이 되는 묶음들. 고를 순서대로 정렬."""
+        cfg = self.config
+        # 혼자서도 닫힌 도형인 획은 이미 완성된 도형이므로 묶지 않는다 (붙여 그린 원 두 개 등)
+        complete = {i for i, fit in enumerate(fits) if self._accepts(fit) and fit.kind in _CLOSED}
+        candidates = []
+        for size in range(2, cfg.shape_max_group_strokes + 1):
+            for start in range(len(strokes) - size + 1):
+                indices = tuple(range(start, start + size))
+                if not complete.isdisjoint(indices):
+                    continue
+                joined = _join_strokes([strokes[i] for i in indices], cfg.shape_join_max_gap)
+                if joined is None:
+                    continue
+                fit = self.classify(joined)
+                if not self._accepts(fit):
+                    continue
+                candidates.append((indices, fit))
+        candidates.sort(key=lambda c: (len(c[0]), c[1].confidence), reverse=True)
+        return candidates
 
     def classify(self, stroke: Stroke) -> ShapeFit:
         """획 하나 -> 도형 종류, confidence, 보정된 외곽선. 도형이 아니면 kind가 UNKNOWN."""
@@ -119,6 +161,11 @@ class ShapeRecognizer:
             return _UNKNOWN  # 열린 곡선, 여러 바퀴 돌린 획
         if _inner_distance(smooth, hull, hull_area) > cfg.closed_max_inner_distance:
             return _UNKNOWN  # 낙서
+        if (
+            _uncovered(hull, smooth, hull_area, cfg.closed_cover_tolerance)
+            > cfg.closed_max_uncovered
+        ):
+            return _UNKNOWN  # 획이 지나가지 않은 껍질 변이 있음 (엉뚱한 획까지 이어 붙인 묶음)
 
         box = cv2.boxPoints(min_rect).astype(float)
         rect_fit = hull_area / max(rw * rh, _EPS)
@@ -221,6 +268,44 @@ def _fit_line(pts: np.ndarray, snap_angle: float) -> tuple[tuple[Point, ...], fl
     return _to_points(ends), progress, bend
 
 
+# --- 여러 획 잇기 -------------------------------------------------------------
+
+
+def _join_strokes(strokes: Sequence[Stroke], max_gap: float) -> Stroke | None:
+    """획들을 끝점이 가까운 순서로 이어 한 획으로 만든다. 빈틈이 너무 크면 None.
+
+    첫 획에서 시작해, 지금까지 이은 사슬의 앞끝이나 뒤끝에 가장 가까운 끝점을 가진 획을
+    방향을 맞춰 붙이기를 반복한다. 그래서 획을 그린 방향과 순서는 결과에 영향이 없다.
+    빈틈 기준은 묶음 전체 bbox 대각선 * max_gap.
+    """
+    pieces = [np.asarray(s.points, dtype=float).reshape(-1, 2) for s in strokes]
+    if any(len(p) == 0 for p in pieces):
+        return None
+    limit = max_gap * float(np.hypot(*np.ptp(np.vstack(pieces), axis=0)))
+
+    chain, rest = [pieces[0]], pieces[1:]
+    while rest:
+        head, tail = chain[0][0], chain[-1][-1]
+        options = []  # (빈틈, 획 번호, 앞에 붙임?, 뒤집음?)
+        for j, p in enumerate(rest):
+            options += [
+                (np.linalg.norm(p[0] - tail), j, False, False),
+                (np.linalg.norm(p[-1] - tail), j, False, True),
+                (np.linalg.norm(p[-1] - head), j, True, False),
+                (np.linalg.norm(p[0] - head), j, True, True),
+            ]
+        gap, j, front, flip = min(options, key=lambda o: o[0])
+        if gap > limit:
+            return None
+        piece = rest.pop(j)
+        piece = piece[::-1] if flip else piece
+        if front:
+            chain.insert(0, piece)
+        else:
+            chain.append(piece)
+    return Stroke(points=list(_to_points(np.vstack(chain))))
+
+
 # --- 측정 도우미 --------------------------------------------------------------
 
 
@@ -253,17 +338,28 @@ def _inner_distance(pts: np.ndarray, hull: np.ndarray, hull_area: float) -> floa
     return float(np.mean(dist)) / math.sqrt(max(hull_area, _EPS))
 
 
+def _uncovered(hull: np.ndarray, pts: np.ndarray, hull_area: float, tolerance: float) -> float:
+    """껍질 둘레를 고르게 나눈 점 중 획에서 tolerance * √껍질 넓이보다 먼 점의 비율."""
+    samples = _sample_ring(hull)
+    dist = np.linalg.norm(samples[:, None] - pts[None], axis=2).min(axis=1)
+    return float((dist > tolerance * math.sqrt(max(hull_area, _EPS))).mean())
+
+
+def _sample_ring(hull: np.ndarray) -> np.ndarray:
+    """닫힌 껍질 둘레를 같은 간격의 _CORNER_SAMPLES개 점으로 다시 찍는다."""
+    ring = hull.reshape(-1, 2).astype(float)
+    ring = np.vstack([ring, ring[:1]])
+    cum = np.concatenate([[0.0], np.cumsum(np.linalg.norm(np.diff(ring, axis=0), axis=1))])
+    s = np.linspace(0, cum[-1], _CORNER_SAMPLES, endpoint=False)
+    return np.column_stack([np.interp(s, cum, ring[:, 0]), np.interp(s, cum, ring[:, 1])])
+
+
 def _max_corner_angle(hull: np.ndarray) -> float:
     """볼록 껍질 둘레를 고르게 나눠 짧은 구간 안에서 가장 크게 꺾인 각도(도).
 
     원은 고르게 조금씩 꺾이고, 다각형은 꼭짓점에서 한꺼번에 크게 꺾인다.
     """
-    ring = hull.reshape(-1, 2).astype(float)
-    ring = np.vstack([ring, ring[:1]])
-    cum = np.concatenate([[0.0], np.cumsum(np.linalg.norm(np.diff(ring, axis=0), axis=1))])
-    s = np.linspace(0, cum[-1], _CORNER_SAMPLES, endpoint=False)
-    samples = np.column_stack([np.interp(s, cum, ring[:, 0]), np.interp(s, cum, ring[:, 1])])
-
+    samples = _sample_ring(hull)
     step = np.roll(samples, -1, axis=0) - samples
     heading = np.arctan2(step[:, 1], step[:, 0])
     turn = (np.roll(heading, -1) - heading + math.pi) % (2 * math.pi) - math.pi

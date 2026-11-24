@@ -182,3 +182,68 @@ def test_result_bbox_matches_corrected_outline(recognizer):
     assert result.bbox.y == pytest.approx(min(ys))
     assert result.bbox.width == pytest.approx(max(xs) - min(xs))
     assert result.bbox.height == pytest.approx(max(ys) - min(ys))
+
+
+# --- 여러 획 -------------------------------------------------------------------
+
+MULTI_NAMES = [c.name for c in fs.multi_stroke_cases()]
+
+
+def _summary(results):
+    return tuple((r.shape, r.stroke_indices) for r in results)
+
+
+@pytest.mark.parametrize("name", MULTI_NAMES)
+def test_multi_stroke_case_is_grouped_as_expected(recognizer, name):
+    for seed in SEEDS:
+        case = next(c for c in fs.multi_stroke_cases(seed) if c.name == name)
+        got = _summary(recognizer.recognize(case.strokes))
+        assert got == case.expected, f"seed={seed}"
+
+
+@pytest.mark.parametrize("name", [c.name for c in fs.multi_stroke_cases() if c.ideal])
+def test_grouped_outline_is_close_to_ideal_shape(recognizer, name):
+    for seed in SEEDS:
+        case = next(c for c in fs.multi_stroke_cases(seed) if c.name == name)
+        [result] = recognizer.recognize(case.strokes)
+        error = _outline_error(result.outline, case.ideal)
+        assert error < 0.1 * _diagonal(case.ideal), f"seed={seed}: {error:.1f}px"
+
+
+def test_strokes_far_apart_are_not_joined(recognizer):
+    # 같은 직선 위에 있지만 사이가 크게 벌어진 두 획 -> 따로 그은 직선 두 개
+    strokes = [fs.line((150, 240), (270, 240), seed=1), fs.line((370, 240), (490, 240), seed=2)]
+    assert _summary(recognizer.recognize(strokes)) == (
+        (ShapeKind.LINE, (0,)),
+        (ShapeKind.LINE, (1,)),
+    )
+
+
+def test_only_consecutive_strokes_are_joined(recognizer):
+    # 두 반원 사이에 멀리 떨어진 다른 획이 끼어 있으면 묶지 않는다
+    left, right = fs.split_stroke(fs.circle(seed=1), 2, reverse=False, seed=1)
+    other = fs.line((600, 50), (700, 50), seed=1)
+    results = recognizer.recognize([left, other, right])
+    assert ShapeKind.CIRCLE not in [r.shape for r in results]
+
+
+def test_group_size_follows_config():
+    pieces = fs.split_stroke(fs.circle(seed=2), 5, seed=2)
+    default = ShapeRecognizer(RecognitionConfig())
+    wider = ShapeRecognizer(RecognitionConfig(shape_max_group_strokes=5))
+
+    assert (ShapeKind.CIRCLE, (0, 1, 2, 3, 4)) not in _summary(default.recognize(pieces))
+    assert _summary(wider.recognize(pieces)) == ((ShapeKind.CIRCLE, (0, 1, 2, 3, 4)),)
+
+
+def test_results_are_in_drawing_order(recognizer):
+    strokes = [
+        fs.line((50, 50), (200, 50), seed=1),
+        *fs.polygon_from_lines(fs.rectangle_corners(), seed=1),
+        fs.circle((600, 400), 60, seed=1),
+    ]
+    assert [r.stroke_indices for r in recognizer.recognize(strokes)] == [
+        (0,),
+        (1, 2, 3, 4),
+        (5,),
+    ]
