@@ -7,7 +7,7 @@
 - 같은 seed면 항상 같은 획이 나오므로 테스트에 그대로 쓸 수 있다
 - sample_cases()는 "이 획은 이 도형으로 인식돼야 한다"는 정답이 붙은 예제 모음
 
-미리보기 이미지: python -m tests.strokes  ->  outputs/fake_strokes.png
+미리보기 이미지: python -m tests.strokes  ->  outputs/fake_strokes.png, fake_multi_strokes.png
 """
 
 from __future__ import annotations
@@ -131,6 +131,71 @@ def scribble(
     span = np.ptp(pts, axis=0).max() or 1.0
     pts = pts / span * size + np.asarray(center, dtype=float)
     return _to_stroke(pts)
+
+
+# --- 여러 획으로 나눠 그린 도형 -----------------------------------------------
+
+
+def split_stroke(
+    stroke: Stroke,
+    pieces: int = 2,
+    gap: float = 0.03,
+    reverse: bool = True,
+    shuffle: bool = False,
+    seed: int = 0,
+) -> list[Stroke]:
+    """한 획을 여러 획으로 자른다.
+
+    - gap: 자른 자리마다 비우는 길이 (전체 길이 대비 비율). 손 추적이 몇 프레임 끊긴 경우
+    - reverse: 일부 조각을 반대 방향으로 그린 것처럼 뒤집는다
+    - shuffle: 조각을 그린 순서를 섞는다
+    """
+    rng = np.random.default_rng(seed)
+    pts = np.asarray(stroke.points, dtype=float)
+    cum = np.concatenate([[0.0], np.cumsum(np.linalg.norm(np.diff(pts, axis=0), axis=1))])
+    s = cum / cum[-1]
+    # 조각이 너무 짧아지지 않도록 자르는 위치를 고르게 흩뿌린다
+    base = np.arange(1, pieces) / pieces
+    cuts = base + rng.uniform(-0.3, 0.3, pieces - 1) / pieces
+    bounds = np.concatenate([[0.0], cuts, [1.0]])
+    out = []
+    for lo, hi in zip(bounds[:-1], bounds[1:], strict=True):
+        lo_ = lo + (gap / 2 if lo > 0 else 0)
+        hi_ = hi - (gap / 2 if hi < 1 else 0)
+        piece = pts[(s >= lo_) & (s <= hi_)]
+        if reverse and rng.random() < 0.5:
+            piece = piece[::-1]
+        out.append(piece)
+    if shuffle:
+        out = [out[i] for i in rng.permutation(len(out))]
+    return [_to_stroke(p) for p in out]
+
+
+def polygon_from_lines(
+    vertices: Sequence[tuple[float, float]],
+    style: HandStyle = HAND,
+    overshoot: float = 0.05,
+    shuffle: bool = False,
+    seed: int = 0,
+) -> list[Stroke]:
+    """다각형의 각 변을 따로 그은 직선 획들. 모서리에서 조금 지나치거나 덜 그린다.
+
+    overshoot: 변 길이 대비 비율. 양 끝마다 [-overshoot, +overshoot]에서 무작위
+    """
+    rng = np.random.default_rng(seed)
+    v = np.asarray(vertices, dtype=float)
+    strokes = []
+    for k in range(len(v)):
+        a, b = v[k], v[(k + 1) % len(v)]
+        d = b - a
+        a = a - d * rng.uniform(-overshoot, overshoot)
+        b = b + d * rng.uniform(-overshoot, overshoot)
+        if rng.random() < 0.5:
+            a, b = b, a
+        strokes.append(line(tuple(a), tuple(b), style=style, seed=int(rng.integers(1 << 31))))
+    if shuffle:
+        strokes = [strokes[i] for i in rng.permutation(len(strokes))]
+    return strokes
 
 
 # --- 이상적인(손떨림 없는) 도형 좌표: 보정 결과와 비교하는 정답 --------------------
@@ -269,6 +334,112 @@ def sample_cases(seed: int = 0) -> list[StrokeCase]:
     ]
 
 
+@dataclass(frozen=True)
+class MultiStrokeCase:
+    """여러 획 예제. expected는 recognize()가 돌려줘야 할 (도형, 획 인덱스) 목록 (획 순서대로)."""
+
+    name: str
+    strokes: list[Stroke]
+    expected: tuple[tuple[ShapeKind, tuple[int, ...]], ...]
+    # expected가 묶인 도형 하나일 때 그 정답 도형 (StrokeCase.ideal과 같은 형식)
+    ideal: tuple[Point, ...] = ()
+
+
+def multi_stroke_cases(seed: int = 0) -> list[MultiStrokeCase]:
+    """여러 획으로 나눠 그린 도형, 그리고 묶으면 안 되는 획 모음."""
+    R, T, C, L = ShapeKind.RECTANGLE, ShapeKind.TRIANGLE, ShapeKind.CIRCLE, ShapeKind.LINE
+    s = seed
+
+    def case(name, strokes, expected, ideal=()):
+        pts = tuple(Point(float(x), float(y)) for x, y in ideal)
+        return MultiStrokeCase(name, strokes, tuple(expected), pts)
+
+    rect, tri = rectangle_corners(), triangle_corners()
+    circ = ellipse_outline(rx=100, ry=100)
+    straight = [(200, 240), (440, 240)]
+    all_of = lambda kind, n: [(kind, tuple(range(n)))]  # noqa: E731
+    return [
+        # 한 붓 도형을 몇 번에 나눠 그림 (방향이 섞이기도 함)
+        case("rect_2_pieces", split_stroke(rectangle(seed=s), 2, seed=s), all_of(R, 2), rect),
+        case("rect_4_lines", polygon_from_lines(rect, seed=s), all_of(R, 4), rect),
+        case(
+            "rect_4_lines_any_order",
+            polygon_from_lines(rect, shuffle=True, seed=s),
+            all_of(R, 4),
+            rect,
+        ),
+        case("tri_3_lines", polygon_from_lines(tri, seed=s), all_of(T, 3), tri),
+        case("tri_2_pieces", split_stroke(triangle(seed=s), 2, seed=s), all_of(T, 2), tri),
+        case("circle_2_halves", split_stroke(circle(seed=s), 2, seed=s), all_of(C, 2), circ),
+        case("circle_3_pieces", split_stroke(circle(seed=s), 3, seed=s), all_of(C, 3), circ),
+        # 손 추적이 잠깐 끊겨 한 획이 둘로 나뉨 (방향 그대로, 빈틈이 조금 더 큼)
+        case(
+            "circle_tracking_lost",
+            split_stroke(circle(seed=s), 2, gap=0.08, reverse=False, seed=s),
+            all_of(C, 2),
+            circ,
+        ),
+        case(
+            "rect_tracking_lost",
+            split_stroke(rectangle(seed=s), 2, gap=0.08, reverse=False, seed=s),
+            all_of(R, 2),
+            rect,
+        ),
+        case(
+            "line_tracking_lost",
+            split_stroke(line(seed=s), 2, gap=0.08, reverse=False, seed=s),
+            all_of(L, 2),
+            straight,
+        ),
+        case("line_3_pieces", split_stroke(line(seed=s), 3, seed=s), all_of(L, 3), straight),
+        case(
+            "line_3_pieces_any_order",
+            split_stroke(line(seed=s), 3, shuffle=True, seed=s),
+            all_of(L, 3),
+            straight,
+        ),
+        # 묶으면 안 되는 획: 각자 따로 인식하거나 손그림으로 남겨야 한다
+        case(
+            "l_shape",
+            [line((220, 140), (220, 340), seed=s), line((220, 340), (420, 340), seed=s + 1)],
+            [(L, (0,)), (L, (1,))],
+        ),
+        case(
+            "t_shape",
+            [line((200, 150), (440, 150), seed=s), line((320, 150), (320, 360), seed=s + 1)],
+            [(L, (0,)), (L, (1,))],
+        ),
+        case(
+            "cross",
+            [line((200, 240), (440, 240), seed=s), line((320, 120), (320, 360), seed=s + 1)],
+            [(L, (0,)), (L, (1,))],
+        ),
+        case(
+            "rect_then_circle",
+            [rectangle((180, 240), 160, 120, seed=s), circle((420, 240), 70, seed=s + 1)],
+            [(R, (0,)), (C, (1,))],
+        ),
+        case(
+            "two_circles_touching",
+            [circle((250, 240), 70, seed=s), circle((390, 240), 70, seed=s + 1)],
+            [(C, (0,)), (C, (1,))],
+        ),
+        case(
+            "rect_then_diagonal",
+            [
+                rectangle(style=replace(HAND, random_start=False), seed=s),
+                line((220, 170), (420, 310), seed=s + 1),
+            ],
+            [(R, (0,)), (L, (1,))],
+        ),
+        case(
+            "tri_lines_then_line",
+            [*polygon_from_lines(tri, seed=s), line((420, 297), (520, 297), seed=s + 1)],
+            [(T, (0, 1, 2)), (L, (3,))],
+        ),
+    ]
+
+
 # --- 내부 구현 ----------------------------------------------------------------
 
 
@@ -391,6 +562,52 @@ def render_preview(
     return img
 
 
+def render_multi_preview(
+    cases: Sequence[MultiStrokeCase], recognizer=None, cell: int = 220, cols: int = 6
+) -> np.ndarray:
+    """여러 획 예제를 격자로 그린 이미지. 획마다 다른 회색, 보정된 도형은 파란 선.
+
+    결과 글씨는 recognize()가 돌려준 (도형, 획 인덱스) 목록. 정답과 다르면 빨간 글씨.
+    """
+    import cv2
+
+    rows = math.ceil(len(cases) / cols)
+    img = np.full((rows * cell, cols * cell, 3), 255, dtype=np.uint8)
+    pad = 30
+    grays = [(170, 170, 170), (110, 110, 110), (200, 170, 140), (140, 170, 200)]
+    for i, case in enumerate(cases):
+        ox, oy = (i % cols) * cell, (i // cols) * cell
+        pts = np.vstack([np.array(s.points) for s in case.strokes])
+        lo, span = pts.min(axis=0), max(np.ptp(pts, axis=0).max(), 1.0)
+
+        def to_cell(arr, lo=lo, span=span, ox=ox, oy=oy):
+            scaled = (np.asarray(arr) - lo) / span * (cell - 2 * pad) + (ox + pad, oy + pad)
+            return scaled.round().astype(np.int32)
+
+        cv2.rectangle(img, (ox, oy), (ox + cell - 1, oy + cell - 1), (220, 220, 220), 1)
+        for k, stroke in enumerate(case.strokes):
+            poly = to_cell(stroke.points)
+            cv2.polylines(img, [poly], False, grays[k % len(grays)], 2)
+            cv2.circle(img, tuple(int(v) for v in poly[0]), 4, (0, 170, 0), -1)
+        cv2.putText(
+            img, case.name, (ox + 6, oy + 16), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (90, 90, 90), 1
+        )
+        if recognizer is None:
+            continue
+
+        results = recognizer.recognize(case.strokes)
+        for r in results:
+            closed = r.shape is not ShapeKind.LINE
+            cv2.polylines(img, [to_cell(r.outline)], closed, (220, 120, 0), 2, cv2.LINE_AA)
+        got = tuple((r.shape, r.stroke_indices) for r in results)
+        color = (0, 130, 0) if got == case.expected else (0, 0, 220)
+        for k, (kind, indices) in enumerate(got[:3]):
+            label = f"{kind.name} {','.join(map(str, indices))}"
+            y = oy + cell - 8 - 15 * (len(got[:3]) - 1 - k)
+            cv2.putText(img, label, (ox + 6, y), cv2.FONT_HERSHEY_SIMPLEX, 0.42, color, 1)
+    return img
+
+
 if __name__ == "__main__":
     from pathlib import Path
 
@@ -403,4 +620,6 @@ if __name__ == "__main__":
     out.parent.mkdir(exist_ok=True)
     recognizer = ShapeRecognizer(RecognitionConfig())
     cv2.imwrite(str(out), render_preview(sample_cases(), recognizer))
-    print(f"saved {out}")
+    multi = out.with_name("fake_multi_strokes.png")
+    cv2.imwrite(str(multi), render_multi_preview(multi_stroke_cases(), recognizer))
+    print(f"saved {out}, {multi}")

@@ -60,3 +60,25 @@ def test_sample_cases_cover_every_target_shape():
     kinds = {c.expected for c in cases}
     assert {ShapeKind.RECTANGLE, ShapeKind.TRIANGLE, ShapeKind.CIRCLE, ShapeKind.LINE} <= kinds
     assert len({c.name for c in cases}) == len(cases)  # 이름 중복 없음
+
+
+def test_split_stroke_keeps_points_in_order_minus_gaps():
+    whole = fs.circle(seed=3)
+    pieces = fs.split_stroke(whole, 3, gap=0.05, reverse=False, seed=3)
+    assert len(pieces) == 3
+    joined = [p for piece in pieces for p in piece.points]
+    assert 0.8 * len(whole.points) < len(joined) < len(whole.points)
+    assert all(p in whole.points for p in joined)
+
+
+def test_polygon_from_lines_makes_one_stroke_per_side():
+    sides = fs.polygon_from_lines(fs.triangle_corners(), seed=4)
+    assert len(sides) == 3
+    assert all(len(s.points) == fs.HAND.num_points for s in sides)
+
+
+def test_multi_stroke_cases_are_reproducible():
+    a, b = fs.multi_stroke_cases(seed=5), fs.multi_stroke_cases(seed=5)
+    assert [c.strokes for c in a] == [c.strokes for c in b]
+    for c in a:
+        assert all(i < len(c.strokes) for _, indices in c.expected for i in indices)
