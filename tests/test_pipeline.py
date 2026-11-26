@@ -85,3 +85,31 @@ def test_save_calls_every_exporter(tmp_path):
     assert svg.exported[0][1].suffix == ".svg"
     assert mmd.exported[0][1].suffix == ".mmd"
     assert all(p.parent == tmp_path for p in pipeline.saved_paths)
+
+
+def test_save_after_recognition(frame, tmp_path):
+    exporter = FakeExporter()
+
+    pipeline, canvas, recognizer = make_pipeline(
+        [make_hand()],
+        [Gesture.DRAW],
+        exporters={".svg": exporter},
+        output_dir=tmp_path,
+    )
+
+    pipeline.process(frame)
+
+    pipeline.handle(Command(CommandType.RECOGNIZE))
+    assert recognizer.calls == 1
+    assert pipeline.results
+
+    pipeline.handle(Command(CommandType.SAVE))
+
+    assert len(exporter.exported) == 1
+
+    results, path = exporter.exported[0]
+
+    assert results == pipeline.results
+    assert path.parent == tmp_path
+    assert path.suffix == ".svg"
+    assert pipeline.saved_paths == [path]
