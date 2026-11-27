@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import replace
 
 from air_canvas.core.interfaces import Recognizer
 from air_canvas.core.types import RecognitionResult, Stroke
@@ -27,15 +28,8 @@ class CompositeRecognizer:
 
         # OCR 결과의 stroke_indices를 원래 strokes 기준 인덱스로 되돌린다.
         index_map = [i for i in range(len(strokes)) if i not in used]
+        # replace로 인덱스만 바꿔야 outline 등 나머지 필드가 빠지지 않는다.
         for r in self.text.recognize(leftover):
             mapped = tuple(index_map[i] for i in r.stroke_indices)
-            results.append(
-                RecognitionResult(
-                    bbox=r.bbox,
-                    confidence=r.confidence,
-                    shape=r.shape,
-                    text=r.text,
-                    stroke_indices=mapped,
-                )
-            )
+            results.append(replace(r, stroke_indices=mapped))
         return results

@@ -36,3 +36,23 @@ def test_only_unrecognized_strokes_go_to_ocr():
 def test_without_text_recognizer_returns_shapes_only():
     results = CompositeRecognizer(FakeRecognizer()).recognize(strokes(2))
     assert [r.shape for r in results] == [ShapeKind.RECTANGLE]
+
+
+def test_ocr_result_fields_are_kept_when_indices_are_remapped():
+    class OutlineRecognizer:
+        def recognize(self, strokes):
+            outline = (Point(0, 0), Point(5, 5))
+            return [
+                RecognitionResult(
+                    bbox=BBox(0, 0, 5, 5),
+                    confidence=0.9,
+                    shape=ShapeKind.LINE,
+                    stroke_indices=(0,),
+                    outline=outline,
+                )
+            ]
+
+    results = CompositeRecognizer(FakeRecognizer(), OutlineRecognizer()).recognize(strokes(2))
+
+    assert results[1].stroke_indices == (1,)
+    assert results[1].outline == (Point(0, 0), Point(5, 5))

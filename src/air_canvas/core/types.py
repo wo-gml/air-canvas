@@ -144,6 +144,12 @@ class RecognitionResult:
     shape: ShapeKind | None = None
     text: str | None = None
     stroke_indices: tuple[int, ...] = ()  # 이 결과를 만든 Stroke들의 인덱스
+    # 손그림 대신 그릴 깨끗한 도형의 점들 (화면 픽셀 좌표). 점들을 차례로 이으면 된다.
+    #   RECTANGLE: 꼭짓점 4개, TRIANGLE: 꼭짓점 3개 (시계 방향, 닫아서 그림)
+    #   CIRCLE: 원/타원 둘레를 따라 찍은 점들 (닫아서 그림)
+    #   LINE: 시작점, 끝점 2개 (열어서 그림)
+    # 비어 있으면 보정 정보가 없다는 뜻이므로 bbox를 쓴다.
+    outline: tuple[Point, ...] = ()
 
     @property
     def is_text(self) -> bool:
