@@ -138,7 +138,9 @@ pytest                             # 테스트
 - [1€ Filter](https://gery.casiez.net/1euro/): Casiez et al., CHI 2012. 손가락 좌표 떨림 보정
 
 **인식**
-- [OpenCV Contour Features](https://docs.opencv.org/4.x/dd/d49/tutorial_py_contour_features.html): `approxPolyDP` 로 도형 꼭짓점 근사
+- [OpenCV Contour Features](https://docs.opencv.org/4.x/dd/d49/tutorial_py_contour_features.html): 도형 인식에 쓴 `convexHull`, `minAreaRect`, `fitLine`, 윤곽 넓이·둘레
+- [OpenCV Structural Analysis and Shape Descriptors](https://docs.opencv.org/4.x/d3/dc0/group__imgproc__shape.html): `minEnclosingTriangle`, `pointPolygonTest`
+- [타원 둘레 라마누잔 근사식](https://en.wikipedia.org/wiki/Ellipse#Circumference): 타원의 원형도 계산 (`recognition/shape.py`)
 - [microsoft/trocr-small-handwritten](https://huggingface.co/microsoft/trocr-small-handwritten): 손글씨 OCR 모델 카드
 - [TrOCR: Transformer-based Optical Character Recognition with Pre-trained Models](https://arxiv.org/abs/2109.10282): Li et al., 2021
 
