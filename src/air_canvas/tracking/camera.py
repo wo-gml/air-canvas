@@ -1,34 +1,47 @@
-"""웹캠 래퍼."""
+"""OpenCV를 이용한 웹캠 프레임 처리."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import cv2
+import numpy as np
 
 from air_canvas.config import CameraConfig
 
-if TYPE_CHECKING:
-    import numpy as np
-
 
 class Camera:
-    """OpenCV VideoCapture 래퍼. `with Camera(cfg) as cam:` 형태로 사용.
-
-    TODO(팀원 A):
-    - cv2.VideoCapture(cfg.index) 열기, 해상도 설정
-    - read(): 프레임 읽기, cfg.mirror면 cv2.flip(frame, 1)
-    - 카메라를 못 열면 이해하기 쉬운 에러 메시지
-    """
+    """웹캠 연결, 프레임 읽기 및 리소스 해제를 담당한다."""
 
     def __init__(self, config: CameraConfig) -> None:
         self.config = config
 
+        # 지정된 번호의 웹캠 연결
+        self.cap = cv2.VideoCapture(config.index)
+
+        if not self.cap.isOpened():
+            self.cap.release()
+            raise RuntimeError(f"웹캠을 열 수 없습니다. 카메라 번호: {config.index}")
+
+        # 카메라 해상도 설정
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, config.width)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, config.height)
+
     def read(self) -> np.ndarray | None:
-        raise NotImplementedError("TODO(팀원 A): 웹캠 프레임 읽기")
+        """웹캠에서 프레임을 읽어 반환한다."""
+
+        success, frame = self.cap.read()
+
+        if not success:
+            return None
+
+        # 거울 모드가 활성화되어 있으면 좌우 반전
+        if self.config.mirror:
+            frame = cv2.flip(frame, 1)
+
+        return frame
 
     def release(self) -> None:
-        # TODO(팀원 A): 웹캠 해제 (cap.release()).
-        # 정리 함수는 예외를 던지면 원래 에러를 가리므로 NotImplementedError를 쓰지 않는다.
-        pass
+        """웹캠 리소스를 해제한다."""
+        self.cap.release()
 
     def __enter__(self) -> Camera:
         return self
