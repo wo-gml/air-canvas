@@ -6,19 +6,30 @@ from air_canvas.core.types import Point
 
 
 class PointSmoother:
-    """손 떨림으로 선이 지글거리지 않게 좌표를 부드럽게 만든다.
-
-    TODO(팀원 A):
-    - 지수 이동평균(EMA)부터 구현: s = alpha * p + (1 - alpha) * s_prev
-    - 여유가 되면 One Euro Filter로 교체 (느릴 땐 부드럽게, 빠를 땐 지연 없이)
-    - reset(): 펜을 들었을 때 이전 좌표를 잊기
-    """
+    """지수이동평균(EMA)으로 손가락 좌표를 보정한다."""
 
     def __init__(self, alpha: float = 0.5) -> None:
+        if not 0.0 < alpha <= 1.0:
+            raise ValueError("alpha는 0보다 크고 1 이하여야 합니다.")
+
         self.alpha = alpha
+        self._previous: Point | None = None
 
     def update(self, point: Point) -> Point:
-        raise NotImplementedError("TODO(팀원 A): 좌표 스무딩")
+        """현재 좌표를 이전 보정 좌표와 평균 낸다."""
+
+        if self._previous is None:
+            self._previous = point
+            return point
+
+        x = self.alpha * point.x + (1 - self.alpha) * self._previous.x
+        y = self.alpha * point.y + (1 - self.alpha) * self._previous.y
+
+        smoothed = Point(x, y)
+        self._previous = smoothed
+
+        return smoothed
 
     def reset(self) -> None:
-        raise NotImplementedError("TODO(팀원 A): 스무딩 상태 초기화")
+        """이전 좌표를 초기화한다."""
+        self._previous = None
