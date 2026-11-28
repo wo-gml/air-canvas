@@ -1,17 +1,24 @@
-"""OpenCV를 이용한 Air Canvas 획 렌더링."""
+"""카메라 프레임 위에 획과 인식 결과를 그린다. `core.interfaces.Renderer` 구현."""
 
 from __future__ import annotations
 
 from collections.abc import Sequence
-
-import cv2
-import numpy as np
+from typing import TYPE_CHECKING
 
 from air_canvas.core.types import RecognitionResult, Stroke
 
+if TYPE_CHECKING:
+    import numpy as np
+
 
 class OpenCVRenderer:
-    """저장된 Stroke를 카메라 프레임 위에 표시한다."""
+    """TODO(팀원 A):
+    - 각 Stroke를 cv2.polylines로 그리기 (color, thickness 반영)
+    - 인식된 도형은 손그림 대신 깨끗한 도형으로 그리기 (RECTANGLE -> cv2.rectangle 등)
+    - 인식된 텍스트는 bbox 위치에 cv2.putText
+      (한글은 cv2.putText로 안 나오므로 필요하면 Pillow ImageDraw 사용)
+    - 현재 제스처, 펜 색상 같은 상태 표시 UI
+    """
 
     def render(
         self,
@@ -19,42 +26,4 @@ class OpenCVRenderer:
         strokes: Sequence[Stroke],
         results: Sequence[RecognitionResult],
     ) -> np.ndarray:
-        """프레임 위에 손그림 획을 그린 이미지를 반환한다."""
-
-        output = frame.copy()
-
-        for stroke in strokes:
-            if not stroke.points:
-                continue
-
-            points = np.array(
-                [(int(point.x), int(point.y)) for point in stroke.points],
-                dtype=np.int32,
-            )
-
-            color = tuple(int(c) for c in stroke.color)
-            thickness = max(1, int(stroke.thickness))
-
-            if len(points) == 1:
-                cv2.circle(
-                    output,
-                    tuple(points[0]),
-                    max(1, thickness // 2),
-                    color,
-                    -1,
-                    cv2.LINE_AA,
-                )
-            else:
-                cv2.polylines(
-                    output,
-                    [points],
-                    isClosed=False,
-                    color=color,
-                    thickness=thickness,
-                    lineType=cv2.LINE_AA,
-                )
-
-        # 인식 결과 출력은 화면·통합 담당자가 구현할 예정
-        _ = results
-
-        return output
+        raise NotImplementedError("TODO(팀원 A): 프레임 위에 캔버스 그리기")
