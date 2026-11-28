@@ -1,37 +1,71 @@
-"""MediaPipe Hands 기반 손 추적기. `core.interfaces.HandTracker` 구현."""
+"""MediaPipe Tasks를 이용한 손 랜드마크 추적."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import time
+from pathlib import Path
+
+import cv2
+import mediapipe as mp
+import numpy as np
 
 from air_canvas.config import TrackingConfig
-from air_canvas.core.types import HandLandmarks
-
-if TYPE_CHECKING:
-    import numpy as np
+from air_canvas.core.types import HandLandmarks, Point
 
 
 class MediaPipeHandTracker:
-    """TODO(팀원 A):
-    - MediaPipe Tasks의 HandLandmarker 사용
-      (mediapipe 1.x부터 구버전 mp.solutions.hands는 삭제됨)
-        from mediapipe.tasks.python import BaseOptions, vision
-        vision.HandLandmarker.create_from_options(vision.HandLandmarkerOptions(
-            base_options=BaseOptions(model_asset_path=...),
-            running_mode=vision.RunningMode.VIDEO, num_hands=..., ...))
-      모델 파일: https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker
-      -> config.model_path 에 저장 (models/ 는 .gitignore 처리됨)
-    - BGR -> RGB 변환, mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)로 감싸
-      detect_for_video(image, timestamp_ms) 호출 (timestamp는 단조 증가해야 함)
-    - 결과를 HandLandmarks(points=21개 Point, handedness, score)로 변환
-    - mediapipe는 import가 무거우니 __init__ 안에서 import
-    """
+    """카메라 프레임에서 손의 21개 랜드마크를 인식한다."""
 
     def __init__(self, config: TrackingConfig) -> None:
         self.config = config
 
+        model_path = Path(config.model_path)
+
+        if not model_path.is_file():
+            raise FileNotFoundError(f"MediaPipe 모델 파일을 찾을 수 없습니다: {model_path}")
+
+        options = mp.tasks.vision.HandLandmarkerOptions(
+            base_options=mp.tasks.BaseOptions(model_asset_path=str(model_path)),
+            running_mode=mp.tasks.vision.RunningMode.VIDEO,
+            num_hands=config.num_hands,
+            min_hand_detection_confidence=config.min_hand_detection_confidence,
+            min_hand_presence_confidence=config.min_hand_presence_confidence,
+            min_tracking_confidence=config.min_tracking_confidence,
+        )
+
+        self._tracker = mp.tasks.vision.HandLandmarker.create_from_options(options)
+
+        self._start_time = time.monotonic()
+        self._last_timestamp = -1
+
     def detect(self, frame: np.ndarray) -> HandLandmarks | None:
-        raise NotImplementedError("TODO(팀원 A): MediaPipe로 손 랜드마크 검출")
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        rgb = np.ascontiguousarray(rgb)
+
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+
+        timestamp = int((time.monotonic() - self._start_time) * 1000)
+        timestamp = max(timestamp, self._last_timestamp + 1)
+        self._last_timestamp = timestamp
+
+        result = self._tracker.detect_for_video(mp_image, timestamp)
+
+        if not result.hand_landmarks:
+            return None
+
+        hand = result.hand_landmarks[0]
+
+        points = tuple(Point(float(landmark.x), float(landmark.y)) for landmark in hand)
+
+        handedness = "Right"
+        score = 1.0
+
+        if result.handedness and result.handedness[0]:
+            category = result.handedness[0][0]
+            handedness = category.category_name
+            score = float(category.score)
+
+        return HandLandmarks(points=points, handedness=handedness, score=score)
 
     def close(self) -> None:
-        pass
+        self._tracker.close()
