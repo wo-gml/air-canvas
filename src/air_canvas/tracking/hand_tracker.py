@@ -22,14 +22,10 @@ class MediaPipeHandTracker:
         model_path = Path(config.model_path)
 
         if not model_path.is_file():
-            raise FileNotFoundError(
-                f"MediaPipe 모델 파일을 찾을 수 없습니다: {model_path}"
-            )
+            raise FileNotFoundError(f"MediaPipe 모델 파일을 찾을 수 없습니다: {model_path}")
 
         options = mp.tasks.vision.HandLandmarkerOptions(
-            base_options=mp.tasks.BaseOptions(
-                model_asset_path=str(model_path)
-            ),
+            base_options=mp.tasks.BaseOptions(model_asset_path=str(model_path)),
             running_mode=mp.tasks.vision.RunningMode.VIDEO,
             num_hands=config.num_hands,
             min_hand_detection_confidence=config.min_hand_detection_confidence,
@@ -37,9 +33,7 @@ class MediaPipeHandTracker:
             min_tracking_confidence=config.min_tracking_confidence,
         )
 
-        self._tracker = (
-            mp.tasks.vision.HandLandmarker.create_from_options(options)
-        )
+        self._tracker = mp.tasks.vision.HandLandmarker.create_from_options(options)
 
         self._start_time = time.monotonic()
         self._last_timestamp = -1
@@ -48,30 +42,20 @@ class MediaPipeHandTracker:
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         rgb = np.ascontiguousarray(rgb)
 
-        mp_image = mp.Image(
-            image_format=mp.ImageFormat.SRGB,
-            data=rgb
-        )
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
 
-        timestamp = int(
-            (time.monotonic() - self._start_time) * 1000
-        )
+        timestamp = int((time.monotonic() - self._start_time) * 1000)
         timestamp = max(timestamp, self._last_timestamp + 1)
         self._last_timestamp = timestamp
 
-        result = self._tracker.detect_for_video(
-            mp_image, timestamp
-        )
+        result = self._tracker.detect_for_video(mp_image, timestamp)
 
         if not result.hand_landmarks:
             return None
 
         hand = result.hand_landmarks[0]
 
-        points = tuple(
-            Point(float(landmark.x), float(landmark.y))
-            for landmark in hand
-        )
+        points = tuple(Point(float(landmark.x), float(landmark.y)) for landmark in hand)
 
         handedness = "Right"
         score = 1.0
@@ -81,11 +65,7 @@ class MediaPipeHandTracker:
             handedness = category.category_name
             score = float(category.score)
 
-        return HandLandmarks(
-            points=points,
-            handedness=handedness,
-            score=score
-        )
+        return HandLandmarks(points=points, handedness=handedness, score=score)
 
     def close(self) -> None:
         self._tracker.close()
